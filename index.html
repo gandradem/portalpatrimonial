@@ -1285,6 +1285,7 @@
 
   /* ================= arranque ================= */
   var started = false;
+  (function(){ var v = document.createElement('div'); v.textContent = 'Versión 6 · 13 nov 2026'; v.style.cssText = 'position:fixed;right:10px;bottom:6px;font-size:11px;color:#8a8f9c;opacity:.8;pointer-events:none;z-index:5'; document.body.appendChild(v); })();
   function startSession(session){
     if(started) return; started = true; uid = session.user.id; db = dbShim;
     $('root').textContent = ''; $('root').appendChild(el('p', 'loading', 'Cargando…'));
