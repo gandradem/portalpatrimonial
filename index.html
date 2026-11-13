@@ -99,6 +99,13 @@
   .opt input{ margin-top:3px; accent-color:var(--accent); }
 
   .summary,section.card.summary{ background:var(--dark); color:var(--dark-ink); border-color:var(--dark); }
+  .pies{ display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:12px; margin-top:16px; }
+  .pies .pie{ margin-top:0; } .pie.wide,.pie-net{ grid-column:1 / -1; }
+  .pie-net{ color:var(--dark-muted); font-size:14.5px; margin:2px 4px 0; }
+  .flow-row{ display:grid; grid-template-columns:84px minmax(0,1fr) 120px; gap:10px; align-items:center; margin:10px 0; font-size:14.5px; }
+  .flow-t{ height:14px; background:rgba(255,255,255,.08); border-radius:7px; overflow:hidden; } .flow-t i{ display:block; height:100%; border-radius:7px; }
+  .flow-v{ text-align:right; font-variant-numeric:tabular-nums; font-weight:600; }
+  .welcome{ font-family:var(--f-display); font-size:clamp(24px,4.6vw,32px); font-weight:600; color:var(--gold-ink); margin:0 0 10px; }
   .pie{ margin-top:16px; border:1px solid var(--dark-line); border-radius:12px; padding:16px; }
   .pie .k{ font-size:12.5px; letter-spacing:.06em; text-transform:uppercase; color:var(--dark-muted); margin:0; }
   .pie .s{ color:var(--dark-muted); font-size:14.5px; margin:8px 0 0; }
@@ -507,30 +514,66 @@
     kpi(box, 'No disponible pronto', c.notAvail != null ? pc(c.notAvail) : '—', 'Casa, auto, retiro y negocio');
   }
 
-  var PIE_COL = ['#6fc3a3','#c9a66b','#7fb3d9','#e0a07a','#b9a3dc','#8fd0d6','#cfcab9'];
+  var PIE_COL = ['#6fc3a3','#c9a66b','#7fb3d9','#e0a07a','#b9a3dc','#8fd0d6','#cfcab9','#e58f9a'];
+  var ASSET_COL = ['#6fc3a3','#c9a66b','#7fb3d9','#e0a07a','#b9a3dc','#8fd0d6','#cfcab9'];
+  var ISHORT = {sueldo:'Sueldo', negocio:'Negocio u honorarios', rentas:'Rentas', otros:'Otros ingresos', pareja:'Aporte de tu pareja'};
+  var ESHORT = {viv:'Vivienda', serv:'Servicios', comida:'Alimentación', trans:'Transporte', salud:'Salud', educ:'Educación', seg:'Seguros', ropa:'Ropa y cuidado', ocio:'Restaurantes y ocio', subs:'Suscripciones', fam:'Apoyo a familiares', otros:'Otros gastos', anual:'Gastos anuales (÷12)'};
   function svgEl(tag, attrs){ var e = document.createElementNS('http://www.w3.org/2000/svg', tag); Object.keys(attrs || {}).forEach(function(k){ e.setAttribute(k, attrs[k]); }); return e; }
-  function fillPie(box, c){
-    box.textContent = ''; box.appendChild(el('p', 'k', 'Cómo está conformado tu patrimonio'));
-    var items = ATYPES.map(function(k, i){ return {l:ASHORT[i], v:c.byType[k] || 0, col:PIE_COL[i]}; }).filter(function(x){ return x.v > 0; });
+  function topN(items, n){
+    items = items.filter(function(x){ return x.v > 0; }).sort(function(a, b){ return b.v - a.v; });
+    if(items.length <= n) return items;
+    var rest = items.slice(n - 1).reduce(function(a, x){ return a + x.v; }, 0);
+    return items.slice(0, n - 1).concat([{l:'Otros', v:rest}]);
+  }
+  function paint(items){ items.forEach(function(x, i){ if(!x.col) x.col = PIE_COL[i % PIE_COL.length]; }); return items; }
+  function donut(title, items, centerLabel, emptyMsg){
+    var box = el('div', 'pie'); box.appendChild(el('p', 'k', title));
     var tot = items.reduce(function(a, x){ return a + x.v; }, 0);
-    if(!tot){ box.appendChild(el('p', 's', 'Agrega lo que tienes en la sección 4 y aquí verás tu gráfico.')); return; }
+    if(!tot){ box.appendChild(el('p', 's', emptyMsg)); return box; }
     var R = 70, C = 2*Math.PI*R, off = 0, wrap = el('div', 'pie-wrap');
-    var svg = svgEl('svg', {viewBox:'0 0 180 180', role:'img', 'aria-label':'Gráfico de pastel de tu patrimonio: ' + items.map(function(x){ return x.l + ' ' + pc(x.v/tot); }).join(', ')});
+    var svg = svgEl('svg', {viewBox:'0 0 180 180', role:'img', 'aria-label':title + ': ' + items.map(function(x){ return x.l + ' ' + pc(x.v/tot); }).join(', ')});
     svg.appendChild(svgEl('circle', {cx:90, cy:90, r:R, fill:'none', stroke:'rgba(255,255,255,.08)', 'stroke-width':34}));
     items.forEach(function(x){
       var len = x.v/tot*C, gap = items.length > 1 ? Math.min(2.5, len*0.4) : 0;
       svg.appendChild(svgEl('circle', {cx:90, cy:90, r:R, fill:'none', stroke:x.col, 'stroke-width':34, 'stroke-dasharray':(len - gap) + ' ' + (C - len + gap), 'stroke-dashoffset':-off, transform:'rotate(-90 90 90)'}));
       off += len;
     });
-    var t1 = svgEl('text', {x:90, y:84, 'font-size':12, 'letter-spacing':'1.2'}); t1.setAttribute('style', 'fill:var(--dark-muted);font-family:var(--f-body);text-transform:uppercase'); t1.textContent = 'Total';
-    var t2 = svgEl('text', {x:90, y:108, 'font-size':20}); t2.textContent = mx(tot);
+    var amt = mx(tot), fs = amt.length > 10 ? 14 : amt.length > 8 ? 16 : 19;
+    var t1 = svgEl('text', {x:90, y:84, 'font-size':11, 'letter-spacing':'1.2'}); t1.setAttribute('style', 'fill:var(--dark-muted);font-family:var(--f-body);text-transform:uppercase'); t1.textContent = centerLabel;
+    var t2 = svgEl('text', {x:90, y:107, 'font-size':fs}); t2.textContent = amt;
     svg.appendChild(t1); svg.appendChild(t2); wrap.appendChild(svg);
     var ul = el('ul', 'pie-leg');
-    items.slice().sort(function(a, b){ return b.v - a.v; }).forEach(function(x){
+    items.forEach(function(x){
       var li = el('li'), sw = el('i'); sw.style.background = x.col; li.appendChild(sw); li.appendChild(el('span', null, x.l)); li.appendChild(el('span', 'v', mx(x.v))); li.appendChild(el('span', 'p', pc(x.v/tot))); ul.appendChild(li);
     });
-    wrap.appendChild(ul); box.appendChild(wrap);
-    if(c.debtTot > 0) box.appendChild(el('p', 's', 'Esto es lo que tienes. Si restas lo que debes (' + mx(c.debtTot) + '), tu patrimonio neto es ' + mx(c.neto) + '.'));
+    wrap.appendChild(ul); box.appendChild(wrap); return box;
+  }
+  function flowCard(c){
+    var box = el('div', 'pie wide'); box.appendChild(el('p', 'k', 'Cada mes: lo que entra y lo que sale'));
+    var rows = [{l:'Ingresos', v:c.inc, col:'#6fc3a3'}, {l:'Gastos', v:c.exp, col:'#e0a07a'}, {l: c.ahorro < 0 ? 'Déficit' : 'Ahorro', v:c.ahorro, col: c.ahorro < 0 ? '#e58f9a' : '#c9a66b'}];
+    var max = Math.max(Math.abs(c.inc), Math.abs(c.exp), Math.abs(c.ahorro), 1);
+    if(!c.inc && !c.exp){ box.appendChild(el('p', 's', 'Llena ingresos y gastos (secciones 2 y 3) y aquí verás cuánto te queda cada mes.')); return box; }
+    rows.forEach(function(r){
+      var row = el('div', 'flow-row'), tr = el('div', 'flow-t'), bi = el('i'); bi.style.width = (Math.abs(r.v)/max*100) + '%'; bi.style.background = r.col; tr.appendChild(bi);
+      row.appendChild(el('span', null, r.l)); row.appendChild(tr); row.appendChild(el('span', 'flow-v', mx(r.v))); box.appendChild(row);
+    });
+    if(c.savingRate != null) box.appendChild(el('p', 's', 'Ahorras ' + pc(c.savingRate) + ' de lo que ganas.'));
+    return box;
+  }
+  function fillPie(box, c, S){
+    box.textContent = '';
+    box.appendChild(flowCard(c));
+    var assets = ATYPES.map(function(k, i){ return {l:ASHORT[i], v:c.byType[k] || 0, col:ASSET_COL[i]}; }).filter(function(x){ return x.v > 0; }).sort(function(a, b){ return b.v - a.v; });
+    box.appendChild(donut('Cómo está conformado tu patrimonio', assets, 'Tienes', 'Agrega lo que tienes en la sección 4 y aquí verás tu gráfico.'));
+    var inc = INC.filter(function(x){ return x.t !== 'sel'; }).map(function(x){ return {l:ISHORT[x.k] || x.l, v:num(S.inc[x.k])}; });
+    box.appendChild(donut('De dónde vienen tus ingresos', paint(topN(inc, 6)), 'Al mes', 'Llena la sección 2 y aquí verás de dónde viene tu dinero.'));
+    var gas = EXP.map(function(x){ return {l:ESHORT[x.k] || x.l, v: x.k === 'anual' ? num(S.exp[x.k])/12 : num(S.exp[x.k])}; });
+    if(c.debtPay > 0) gas.push({l:'Pagos de deudas', v:c.debtPay});
+    box.appendChild(donut('En qué se va tu dinero', paint(topN(gas, 7)), 'Al mes', 'Llena la sección 3 y aquí verás en qué gastas.'));
+    var dt = {}; S.debts.forEach(function(r){ var v = num(r.s); if(v > 0){ var k = r.t || 'Otro'; dt[k] = (dt[k] || 0) + v; } });
+    var debts = Object.keys(dt).map(function(k){ return {l:k, v:dt[k]}; });
+    box.appendChild(donut('Lo que debes', paint(topN(debts, 6)), 'Debes', S.nodebt ? 'Indicaste que no tienes deudas.' : 'Llena la sección 5 y aquí verás cuánto debes y a quién.'));
+    if(c.debtTot > 0 || c.assets > 0){ var nt = el('p', 'pie-net', 'Tienes ' + mx(c.assets) + ' y debes ' + mx(c.debtTot) + ': tu patrimonio neto es ' + mx(c.neto) + '.'); box.appendChild(nt); }
   }
   function fillPerfil(pf, p, who){
     pf.textContent = '';
@@ -545,12 +588,12 @@
     $('incT').textContent = mx(c.inc); $('expT').textContent = mx(c.exp); $('assetT').textContent = mx(c.assets); $('debtT').textContent = mx(c.debtTot);
     $('progN').textContent = n; $('progBar').style.width = (n/8*100) + '%';
     d.forEach(function(ok, i){ $('chip' + i).classList.toggle('done', ok); });
-    fillKpis($('kpis'), c); fillPie($('pie'), c); fillPerfil($('perfil'), p, 'Tú'); $('out').value = summaryText(S, c, p);
+    fillKpis($('kpis'), c); fillPie($('pie'), c, S); fillPerfil($('perfil'), p, 'Tú'); $('out').value = summaryText(S, c, p);
     var sb = $('send'); if(sb){ var sent = meta.status === 'enviado'; sb.textContent = sent ? 'Enviar de nuevo con mis cambios' : (n === 8 ? 'Enviar a mi asesor' : 'Enviar a mi asesor (faltan ' + (8 - n) + ' secciones)'); }
   }
   var FORM_HTML =
     '<header><div id="fLogo"></div><p class="eyebrow" id="fEyebrow">Tarea de la sesión 1</p><h1>Tu patrimonio en números</h1>' +
-    '<p class="lead">Llénalo con calma, en una o dos veces: toma unos 40 minutos. Si no sabes un dato, déjalo en blanco o pon una cifra aproximada. Lo calcula todo solo.</p>' +
+    '<p class="welcome" id="fWelcome" hidden></p><p class="lead">Para conocer tu patrimonio, llena con calma y a conciencia los siguientes puntos. Toma unos 40 minutos. Si no sabes un dato, déjalo en blanco o pon una cifra aproximada. Si tienes alguna duda, contáctame.</p>' +
     '<p class="privacy" id="fPrivacy"></p><p class="banner" id="fBanner" hidden></p></header>' +
     '<section class="card" id="svCard"><h2>Tu opinión de la sesión</h2><p class="hint">Menos de 2 minutos, con opciones para tocar. Me ayuda a mejorar cada sesión.</p><div id="svBox"></div></section>' +
     '<div class="prog"><div class="prog-top"><span><b id="progN">0</b> de 8 secciones</span><span id="progNote" role="status" aria-live="polite"></span></div><div class="bar"><i id="progBar"></i></div><div class="chips" id="chips"></div></div>' +
@@ -562,7 +605,7 @@
     '<section class="card" id="s6"><h2><span class="n">6</span>Protección</h2><p class="hint">Qué tan cubierta estás si algo sale mal.</p><div class="grid" id="prot"></div></section>' +
     '<section class="card" id="s7"><h2><span class="n">7</span>Tus metas</h2><p class="hint">Cosas que quieres lograr con tu dinero, con monto y año aproximados. Por ejemplo: enganche, viaje, estudios, retiro.</p><div class="rows goals"><div class="rowhead"><span>Meta</span><span>Monto aproximado</span><span>Año</span><span>Importancia</span><span></span></div><div id="goalRows" class="rows"></div></div><button class="btn add" type="button" id="addGoal">Agregar meta</button></section>' +
     '<section class="card" id="s8"><h2><span class="n">8</span>Tu perfil de riesgo</h2><p class="hint">Elige la respuesta que más se parezca a ti, no la que crees que sería la correcta. No hay respuestas buenas ni malas.</p><div id="risk"></div></section>' +
-    '<section class="card summary" id="resumen"><h2><span class="n">★</span>Tu resumen</h2><p class="hint">Se actualiza solo con lo que vas llenando. Son números aproximados: los revisamos juntos en la sesión 2.</p><div class="kpis" id="kpis"></div><div class="pie" id="pie"></div><div class="perfil" id="perfil"></div>' +
+    '<section class="card summary" id="resumen"><h2><span class="n">★</span>Tu resumen</h2><p class="hint">Se actualiza solo con lo que vas llenando. Son números aproximados: los revisamos juntos en la sesión 2.</p><div class="kpis" id="kpis"></div><div class="pies" id="pie"></div><div class="perfil" id="perfil"></div>' +
     '<div class="actions"><button class="btn primary" type="button" id="send">Enviar a mi asesor</button><button class="btn" type="button" id="dlTxt">Descargar resumen</button><button class="btn" type="button" id="copy">Copiar resumen</button><button class="btn" type="button" id="wipe">Borrar mis respuestas</button></div>' +
     '<p class="msg" id="msg" role="status" aria-live="polite"></p><textarea class="out" id="out" readonly aria-label="Resumen en texto"></textarea></section>' +
     '<p class="foot">Este formulario es una herramienta educativa de organización. Sus resultados son aproximados y no constituyen una recomendación de inversión.</p>';
@@ -630,6 +673,7 @@
     brand($('fLogo'), 17);
     if(!formOpts.host){ var ow0 = el('div'); ow0.style.cssText = 'display:flex;justify-content:flex-end;margin:-4px 0 10px'; ow0.appendChild(outBtn()); $('fLogo').appendChild(ow0); }
     $('fPrivacy').textContent = persist ? 'Tus respuestas se guardan en tu portal y solo las ve tu asesor. Se guardan solas mientras llenas.' : 'Tus respuestas se guardan únicamente en este navegador.';
+    var wn = ((profile && profile.name) || S.about.nombre || '').trim(); if(!formOpts.host && !isAdmin && wn){ $('fWelcome').textContent = 'Bienvenido(a): ' + wn; $('fWelcome').hidden = false; }
     if(formOpts.banner){ $('fBanner').textContent = formOpts.banner; $('fBanner').hidden = false; }
     if(formOpts.eyebrow) $('fEyebrow').textContent = formOpts.eyebrow;
     if(!persist) $('send').hidden = true;
@@ -1128,7 +1172,7 @@
     } else {
       var c = r.c, S0 = r.S;
       var sm = el('section', 'card summary'); sm.style.marginTop = '20px'; var h2 = el('h2'); h2.appendChild(el('span', 'n', '★')); h2.appendChild(document.createTextNode('Resumen')); sm.appendChild(h2);
-      var k = el('div', 'kpis'); fillKpis(k, c); sm.appendChild(k); var pe = el('div', 'pie'); fillPie(pe, c); sm.appendChild(pe); var pf = el('div', 'perfil'); fillPerfil(pf, r.p, r.name); sm.appendChild(pf);
+      var k = el('div', 'kpis'); fillKpis(k, c); sm.appendChild(k); var pe = el('div', 'pies'); fillPie(pe, c, S0); sm.appendChild(pe); var pf = el('div', 'perfil'); fillPerfil(pf, r.p, r.name); sm.appendChild(pf);
       var ac = el('div', 'actions'), d1 = el('button', 'btn primary', 'Descargar resumen'); d1.type = 'button'; var txt = summaryText(S0, c, r.p); d1.addEventListener('click', function(){ download('patrimonio-' + r.name.toLowerCase().replace(/[^a-z0-9]+/g, '-') + '.txt', txt, say); });
       var d2 = el('button', 'btn', 'Copiar resumen'); d2.type = 'button'; d2.addEventListener('click', function(){ copyText(txt, say); }); ac.appendChild(d1); ac.appendChild(d2); sm.appendChild(ac);
       var tn = el('p', 'msg'); tn.id = 'toast'; sm.appendChild(tn); body.appendChild(sm);
