@@ -904,9 +904,7 @@
     });
     if(list) html += '</ol>';
     var g = '#a8814a', cs = 'width:14px;height:14px;font-size:1px;line-height:1px;', ct = function(s){ return '<td style="' + cs + s + '">&nbsp;</td>'; }, bd = function(a){ return 'border-' + a + ':2px solid ' + g + ';'; };
-    var mark = '<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 24px;border-collapse:collapse"><tr>' + ct(bd('top') + bd('left')) + '<td style="font-size:1px">&nbsp;</td>' + ct(bd('top') + bd('right')) + '</tr>' +
-      '<tr><td></td><td style="padding:6px 26px;font-family:Arial,Helvetica,sans-serif;font-size:15px;letter-spacing:3px;color:#14213d;white-space:nowrap">GUSTAVO <span style="color:' + g + '">|</span> <b>ANDRADE</b></td><td></td></tr>' +
-      '<tr>' + ct(bd('bottom') + bd('left')) + '<td style="font-size:1px">&nbsp;</td>' + ct(bd('bottom') + bd('right')) + '</tr></table>';
+    var mark = '<p style="margin:0 0 20px"><img src="' + APP_URL.replace(/\/?$/, '/') + 'logo.png" width="300" alt="Gustavo Andrade" style="display:block;width:300px;max-width:100%;height:auto;border:0"></p>';
     var doc = '<div style="font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.55;color:#14213d;max-width:560px">' + mark + html + '</div>';
     return {subject:fillP(c.subject), body:plain, html:doc};
   }
@@ -1306,7 +1304,7 @@
 
   /* ================= arranque ================= */
   var started = false;
-  (function(){ var v = document.createElement('div'); v.textContent = 'Versión 8 · 13 nov 2026'; v.style.cssText = 'text-align:center;font-size:11px;color:#8a8f9c;padding:0 16px 20px;'; document.body.appendChild(v); })();
+  (function(){ var v = document.createElement('div'); v.textContent = 'Versión 9 · 13 nov 2026'; v.style.cssText = 'text-align:center;font-size:11px;color:#8a8f9c;padding:0 16px 20px;'; document.body.appendChild(v); })();
   function startSession(session){
     if(started) return; started = true; uid = session.user.id; db = dbShim;
     $('root').textContent = ''; $('root').appendChild(el('p', 'loading', 'Cargando…'));
