@@ -34,7 +34,7 @@
   .wrap.wide{ max-width:1280px; }
   .eyebrow{ font-family:'Montserrat','Inter',sans-serif; font-size:12px; font-weight:600; letter-spacing:.18em; text-transform:uppercase; color:var(--gold-ink); margin:0 0 8px; }
   h1{ font-family:var(--f-display); font-weight:600; font-size:clamp(36px,6.5vw,56px); line-height:1.05; margin:0 0 12px; text-wrap:balance; }
-  .lead{ color:var(--muted); font-size:17px; margin:0 0 8px; max-width:62ch; }
+  .lead{ color:var(--muted); font-size:17px; margin:0 0 8px; max-width:none; }
   .privacy{ font-size:14px; color:var(--muted); margin:10px 0 0; padding:12px 14px; border:1px dashed var(--line); border-radius:10px; background:var(--surface); }
   .banner{ font-size:14px; margin:14px 0 0; padding:12px 14px; border-radius:10px; background:var(--warn-bg); color:var(--warn); }
   .loading{ color:var(--muted); padding:60px 0; text-align:center; }
@@ -1304,7 +1304,7 @@
 
   /* ================= arranque ================= */
   var started = false;
-  (function(){ var v = document.createElement('div'); v.textContent = 'Versión 10 · 13 nov 2026'; v.style.cssText = 'text-align:center;font-size:11px;color:#8a8f9c;padding:0 16px 20px;'; document.body.appendChild(v); })();
+  (function(){ var v = document.createElement('div'); v.textContent = 'Versión 11 · 13 nov 2026'; v.style.cssText = 'text-align:center;font-size:11px;color:#8a8f9c;padding:0 16px 20px;'; document.body.appendChild(v); })();
   function startSession(session){
     if(started) return; started = true; uid = session.user.id; db = dbShim;
     $('root').textContent = ''; $('root').appendChild(el('p', 'loading', 'Cargando…'));
