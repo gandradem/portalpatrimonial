@@ -199,6 +199,7 @@
 (function(){
   'use strict';
   var APP_URL = location.origin + location.pathname.replace(/index\.html$/, '');
+  var PRE = (function(){ try{ var q = new URLSearchParams(location.search), e = (q.get('e') || '').trim().slice(0, 120), c = (q.get('c') || '').replace(/[^A-Za-z0-9]/g, '').slice(0, 14); if(e || c) history.replaceState(null, '', location.pathname + location.hash); return {e:e, c:c}; }catch(x){ return {e:'', c:''}; } })();
   var SB_URL = 'https://hejhrgglspayhkpevctb.supabase.co', SB_KEY = 'sb_publishable_OFwmFXXT7SuHsHIljhJ74Q_dRn5e9cn';
   var db = null, user = null, dl = null, uid = null, isAdmin = false, profile = null, sb = null;
 
@@ -649,10 +650,12 @@
     [['login', 'Entrar'], ['signup', 'Crear cuenta']].forEach(function(t){ var b = el('button', 'fchip', t[1]); b.type = 'button'; b.setAttribute('aria-pressed', String(mode === t[0])); b.addEventListener('click', function(){ showAuth(t[0]); }); tabs.appendChild(b); });
     g.appendChild(tabs);
     if(notice) g.appendChild(el('p', 'note', notice));
+    if(mode === 'signup' && PRE.e && PRE.c) g.appendChild(el('p', 'note', 'Ya llenamos tu correo y tu código de invitación. Solo elige tu contraseña.'));
     var err = el('p', 'err'); err.setAttribute('role', 'alert');
     var email = fieldIn(g, 'aMail', 'Correo', 'email', 'correo@ejemplo.com', 'email');
     var code = null, pw2 = null;
-    if(mode === 'signup') code = fieldIn(g, 'aCode', 'Código de invitación', 'text', 'ABC-123', 'off');
+    if(PRE.e) email.value = PRE.e;
+    if(mode === 'signup'){ code = fieldIn(g, 'aCode', 'Código de invitación', 'text', 'ABC-123', 'off'); if(PRE.c) code.value = PRE.c; }
     var pw = fieldIn(g, 'aPw', mode === 'signup' ? 'Elige una contraseña (mínimo 8 caracteres)' : 'Contraseña', 'password', '', mode === 'signup' ? 'new-password' : 'current-password');
     if(mode === 'signup') pw2 = fieldIn(g, 'aPw2', 'Repite la contraseña', 'password', '', 'new-password');
     if(code){ code.style.textTransform = 'uppercase'; code.style.letterSpacing = '.15em'; code.maxLength = 14; }
@@ -687,7 +690,7 @@
         showAuth('login', 'Te enviamos un correo para confirmar tu cuenta. Después de confirmarlo, entra aquí.');
       }, function(e){ b.disabled = false; err.textContent = authErr(e); });
     }
-    b.addEventListener('click', go); g.addEventListener('keydown', function(e){ if(e.key === 'Enter') go(); }); email.focus();
+    b.addEventListener('click', go); g.addEventListener('keydown', function(e){ if(e.key === 'Enter') go(); }); (PRE.e && (!code || PRE.c) ? pw : email).focus();
   }
   function showNewPass(){
     var g = authShell('Elige una contraseña nueva para tu cuenta.');
@@ -775,7 +778,7 @@
     'Gracias por la sesión de hoy. Como acordamos, tu tarea es llenar un formulario breve con tus números: ingresos, gastos, lo que tienes y lo que debes. Así, en la sesión 2 trabajamos con tu información real y armamos tu plan.','',
     'Cómo registrarte (toma unos 40 minutos y se guarda solo):',
     '1. Abre tu portal: {enlace}',
-    '2. Toca «Crear cuenta», escribe este correo ({correo}) y este código de invitación: {codigo}',
+    '2. Tu correo ({correo}) y tu código de invitación ({codigo}) ya vienen llenos en ese enlace. Si no aparecen, escríbelos tú.',
     '3. Elige tu contraseña. La próxima vez entras con tu correo y tu contraseña.',
     '4. Llena las 8 secciones. Puedes dejar en blanco lo que no sepas. Te ayuda tener a la mano tus estados de cuenta recientes.',
     '5. Al final toca "Enviar a mi asesor".','',
@@ -794,7 +797,7 @@
     var plain = fillP(lines.join('\n')).replace(/\n{3,}/g, '\n\n');
     var hv = {nombre:esc(v.nombre), correo:esc(v.correo), asesor:esc(v.asesor), fecha_limite:esc(v.fecha_limite || ''),
       codigo:'<span style="font-family:Consolas,monospace;font-size:17px;font-weight:700;letter-spacing:2px;background:#f1eee6;padding:3px 10px;border-radius:6px">' + esc(v.codigo) + '</span>',
-      enlace:'<a href="' + esc(v.enlace) + '" style="color:#7a5f34;font-weight:700">' + esc(v.enlace) + '</a>'};
+      enlace:'<a href="' + esc(v.enlace) + '" style="color:#7a5f34;font-weight:700">Abrir mi portal</a>'};
     var fillH = function(t){ return esc(t).replace(/\{(\w+)\}/g, function(m, k){ return hv[k] != null ? hv[k] : m; }); };
     var html = '', list = false, blank = true;
     lines.forEach(function(l){
@@ -814,7 +817,7 @@
   }
   function mailFor(inv, code, email){
     var c = curCfg();
-    return buildEmail(c, {nombre:firstName(inv.name), correo:email || inv.email || '', codigo:showCode(code), enlace:APP_URL, asesor:c.asesor, fecha_limite:c.fecha});
+    return buildEmail(c, {nombre:firstName(inv.name), correo:email || inv.email || '', codigo:showCode(code), enlace:APP_URL + '?e=' + encodeURIComponent(email || inv.email || '') + '&c=' + code, asesor:c.asesor, fecha_limite:c.fecha});
   }
   function chrome(root){
     root.className = 'wrap wide'; root.textContent = '';
@@ -1065,7 +1068,7 @@
     var tb = el('textarea'); tb.rows = 16; tb.value = cfgDraft.body; fld(L, 'cBo', 'Mensaje', tb);
     var fr = el('iframe', 'preview'); fr.setAttribute('sandbox', ''); fr.setAttribute('title', 'Vista previa'); fr.style.height = '520px';
     var sub = el('p'); sub.style.cssText = 'font-weight:500;margin:0 0 8px';
-    function prev(){ var m = buildEmail(cfgDraft, {nombre:'Laura', correo:'laura@ejemplo.com', codigo:'ABC-123', enlace:APP_URL, asesor:cfgDraft.asesor, fecha_limite:cfgDraft.fecha}); sub.textContent = 'Asunto: ' + m.subject; fr.srcdoc = '<body style="margin:16px;background:#fff">' + m.html + '</body>'; }
+    function prev(){ var m = buildEmail(cfgDraft, {nombre:'Laura', correo:'laura@ejemplo.com', codigo:'ABC-123', enlace:APP_URL + '?e=laura%40ejemplo.com&c=ABC123', asesor:cfgDraft.asesor, fecha_limite:cfgDraft.fecha}); sub.textContent = 'Asunto: ' + m.subject; fr.srcdoc = '<body style="margin:16px;background:#fff">' + m.html + '</body>'; }
     [[ia,'asesor'],[ifc,'fecha'],[is,'subject'],[tb,'body']].forEach(function(p){ p[0].addEventListener('input', function(){ cfgDraft[p[1]] = p[0].value; prev(); }); });
     var pt = el('p', 'k'); pt.style.cssText = 'font-size:12.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin:0 0 6px'; pt.textContent = 'Vista previa (con datos de ejemplo)';
     R.appendChild(pt); R.appendChild(sub); R.appendChild(fr); cols.appendChild(L); cols.appendChild(R); pn.appendChild(cols); prev();
@@ -1217,7 +1220,7 @@
     sb.auth.getSession().then(function(r){
       var ses = r.data && r.data.session;
       if(recovery && ses){ started = true; showNewPass(); return; }
-      if(ses) startSession(ses); else if(!recovery) showAuth('login');
+      if(ses) startSession(ses); else if(!recovery) showAuth(PRE.c ? 'signup' : 'login');
     }, function(){ showAuth('login'); });
   })();
 })();
