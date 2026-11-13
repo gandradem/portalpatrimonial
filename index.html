@@ -105,7 +105,8 @@
   .flow-row{ display:grid; grid-template-columns:84px minmax(0,1fr) 120px; gap:10px; align-items:center; margin:10px 0; font-size:14.5px; }
   .flow-t{ height:14px; background:rgba(255,255,255,.08); border-radius:7px; overflow:hidden; } .flow-t i{ display:block; height:100%; border-radius:7px; }
   .flow-v{ text-align:right; font-variant-numeric:tabular-nums; font-weight:600; }
-  .welcome{ font-family:var(--f-display); font-size:clamp(24px,4.6vw,32px); font-weight:600; color:var(--gold-ink); margin:0 0 10px; }
+  .motto{ font-family:var(--f-display); font-style:italic; font-weight:500; font-size:clamp(19px,3.6vw,24px); line-height:1.25; color:var(--gold-ink); margin:0 0 14px; max-width:48ch; }
+  .welcome{ font-family:var(--f-display); font-size:clamp(24px,4.6vw,32px); font-weight:600; color:var(--ink); margin:0 0 4px; }
   .pie{ margin-top:16px; border:1px solid var(--dark-line); border-radius:12px; padding:16px; }
   .pie .k{ font-size:12.5px; letter-spacing:.06em; text-transform:uppercase; color:var(--dark-muted); margin:0; }
   .pie .s{ color:var(--dark-muted); font-size:14.5px; margin:8px 0 0; }
@@ -593,7 +594,7 @@
   }
   var FORM_HTML =
     '<header><div id="fLogo"></div><p class="eyebrow" id="fEyebrow">Tarea de la sesión 1</p><h1>Tu patrimonio en números</h1>' +
-    '<p class="welcome" id="fWelcome" hidden></p><p class="lead">Para conocer tu patrimonio, llena con calma y a conciencia los siguientes puntos. Toma unos 40 minutos. Si no sabes un dato, déjalo en blanco o pon una cifra aproximada. Si tienes alguna duda, contáctame.</p>' +
+    '<p class="welcome" id="fWelcome" hidden></p><p class="motto">Libertad financiera es tener control sobre tu tiempo.</p><p class="lead">Para conocer tu patrimonio, llena con calma y a conciencia los siguientes puntos. Toma unos 40 minutos. Si no sabes un dato, déjalo en blanco o pon una cifra aproximada. Si tienes alguna duda, contáctame.</p>' +
     '<p class="privacy" id="fPrivacy"></p><p class="banner" id="fBanner" hidden></p></header>' +
     '<section class="card" id="svCard"><h2>Tu opinión de la sesión</h2><p class="hint">Menos de 2 minutos, con opciones para tocar. Me ayuda a mejorar cada sesión.</p><div id="svBox"></div></section>' +
     '<div class="prog"><div class="prog-top"><span><b id="progN">0</b> de 8 secciones</span><span id="progNote" role="status" aria-live="polite"></span></div><div class="bar"><i id="progBar"></i></div><div class="chips" id="chips"></div></div>' +
