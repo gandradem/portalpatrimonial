@@ -989,13 +989,22 @@
     }, function(){ modal.busy = false; modal.err = 'No se pudo guardar. Inténtalo de nuevo.'; }).then(function(){ renderAdmin(); });
   }
   function copyRich(html, text, ok){
+    var done = false;
+    try{
+      var h = document.createElement('div'); h.contentEditable = 'true'; h.setAttribute('aria-hidden', 'true');
+      h.style.cssText = 'position:fixed;left:0;top:0;width:600px;opacity:0;pointer-events:none;background:#fff;color:#000';
+      h.innerHTML = html; document.body.appendChild(h);
+      var rg = document.createRange(); rg.selectNodeContents(h); var sl = window.getSelection(); sl.removeAllRanges(); sl.addRange(rg);
+      done = document.execCommand('copy'); sl.removeAllRanges(); document.body.removeChild(h);
+    }catch(e){ done = false; }
+    if(done){ ok('Copiado con tu logo. Pégalo en Gmail (Cmd/Ctrl+V).'); return; }
     try{
       if(navigator.clipboard && window.ClipboardItem){
-        navigator.clipboard.write([new ClipboardItem({'text/html':new Blob([html], {type:'text/html'}), 'text/plain':new Blob([text], {type:'text/plain'})})]).then(function(){ ok('Copiado con tu logo. Pégalo en Gmail.'); }, function(){ copyText(text, ok); });
+        navigator.clipboard.write([new ClipboardItem({'text/html':new Blob([html], {type:'text/html'}), 'text/plain':new Blob([text], {type:'text/plain'})})]).then(function(){ ok('Copiado con tu logo. Pégalo en Gmail (Cmd/Ctrl+V).'); }, function(){ copyText(text, function(){ ok('Solo se pudo copiar texto sin logo. Usa «Abrir Gmail» y pega.'); }); });
         return;
       }
     }catch(e){}
-    copyText(text, ok);
+    copyText(text, function(){ ok('Solo se pudo copiar texto sin logo.'); });
   }
   function renderModal(root){
     var inv = invites[modal.key]; if(!inv){ modal = null; return; }
@@ -1297,7 +1306,7 @@
 
   /* ================= arranque ================= */
   var started = false;
-  (function(){ var v = document.createElement('div'); v.textContent = 'Versión 7 · 13 nov 2026'; v.style.cssText = 'text-align:center;font-size:11px;color:#8a8f9c;padding:0 16px 20px;'; document.body.appendChild(v); })();
+  (function(){ var v = document.createElement('div'); v.textContent = 'Versión 8 · 13 nov 2026'; v.style.cssText = 'text-align:center;font-size:11px;color:#8a8f9c;padding:0 16px 20px;'; document.body.appendChild(v); })();
   function startSession(session){
     if(started) return; started = true; uid = session.user.id; db = dbShim;
     $('root').textContent = ''; $('root').appendChild(el('p', 'loading', 'Cargando…'));
