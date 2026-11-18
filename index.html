@@ -1181,6 +1181,39 @@
     ar.appendChild(sv); ar.appendChild(rs); pn.appendChild(ar); var tn = el('p', 'toast'); tn.id = 'toast'; pn.appendChild(tn); body.appendChild(pn);
   }
 
+
+  function answerData(S0){
+    var v = function(x){ x = x == null ? '' : String(x).trim(); return x || '—'; };
+    var out = [], rows;
+    rows = ABOUT.map(function(f){ return [f.l, v(S0.about[f.k])]; }); out.push({h:'1. Sobre ti', rows:rows});
+    rows = INC.map(function(f){ return [f.l, v(S0.inc[f.k])]; }); out.push({h:'2. Ingresos (al mes)', rows:rows});
+    rows = EXP.map(function(f){ return [f.l, v(S0.exp[f.k])]; }); out.push({h:'3. Gastos (al mes)', rows:rows});
+    rows = []; S0.assets.forEach(function(a, i){ if(!(a.t || a.d || a.m)) return; rows.push(['Activo ' + (i + 1), (a.t || 'Sin tipo') + ' · ' + (a.d || 'sin descripción') + ' · ' + (a.m ? '$' + a.m : 'sin monto')]); });
+    if(!rows.length) rows.push(['Activos', '—']); out.push({h:'4. Lo que tienes', rows:rows});
+    rows = []; S0.debts.forEach(function(d, i){ if(!(d.t || d.d || d.s || d.p || d.r)) return; rows.push(['Deuda ' + (i + 1), (d.t || 'Sin tipo') + ' · ' + (d.d || 'sin acreedor') + ' · saldo ' + (d.s ? '$' + d.s : '—') + ' · pago al mes ' + (d.p ? '$' + d.p : '—') + ' · tasa ' + (d.r ? d.r + '%' : '—')]); });
+    if(!rows.length) rows.push(['Deudas', S0.nodebt ? 'Indica que no tiene deudas' : '—']); out.push({h:'5. Lo que debes', rows:rows});
+    rows = PROT.map(function(f){ return [f.l, v(S0.prot[f.k])]; }); out.push({h:'6. Protección', rows:rows});
+    rows = []; S0.goals.forEach(function(g, i){ if(!(g.n || g.m || g.y || g.i)) return; rows.push(['Meta ' + (i + 1), (g.n || 'Sin nombre') + ' · ' + (g.m ? '$' + g.m : 'sin monto') + ' · año ' + (g.y || '—') + ' · prioridad ' + (g.i || '—')]); });
+    if(!rows.length) rows.push(['Metas', '—']); out.push({h:'7. Metas', rows:rows});
+    rows = RISK.map(function(q){ var a = S0.risk[q.k]; return [q.q, a && q.o[a - 1] ? q.o[a - 1] : '—']; }); out.push({h:'8. Perfil de riesgo', rows:rows});
+    return out;
+  }
+  function answersText(name, S0){
+    var t = 'Respuestas de ' + name + '\n';
+    answerData(S0).forEach(function(sec){ t += '\n' + sec.h + '\n'; sec.rows.forEach(function(r){ t += '- ' + r[0] + ': ' + r[1] + '\n'; }); });
+    return t;
+  }
+  function answersPanel(name, S0){
+    var pn = el('section', 'panel'), hd = el('div', 'detail-head'); hd.appendChild(el('h3', null, 'Respuestas tal cual las capturó'));
+    var txt = answersText(name, S0), bw = el('div'); bw.style.cssText = 'display:flex;gap:10px;flex-wrap:wrap';
+    var b1 = el('button', 'btn sm', 'Copiar respuestas'); b1.type = 'button'; b1.addEventListener('click', function(){ copyText(txt, say); });
+    var b2 = el('button', 'btn sm', 'Descargar respuestas'); b2.type = 'button'; b2.addEventListener('click', function(){ download('respuestas-' + name.toLowerCase().replace(/[^a-z0-9]+/g, '-') + '.txt', txt, say); });
+    bw.appendChild(b1); bw.appendChild(b2); hd.appendChild(bw); pn.appendChild(hd);
+    pn.appendChild(el('p', 'hint', 'Lo que escribió tu cliente en cada campo, sin cálculos ni redondeos. «—» significa que lo dejó en blanco.'));
+    answerData(S0).forEach(function(sec){ var d = el('details'); d.open = true; d.style.cssText = 'margin-top:14px'; var sm = el('summary', null, sec.h); sm.style.cssText = 'cursor:pointer;font-weight:700;margin-bottom:8px'; d.appendChild(sm); var kv = el('div', 'kv'); kv.style.gridTemplateColumns = 'minmax(0,1fr) minmax(0,1fr)'; sec.rows.forEach(function(r){ kv.appendChild(el('span', null, r[0])); var vv = el('span', null, r[1]); vv.style.cssText = 'text-align:left;color:var(--ink,inherit);font-weight:600;overflow-wrap:anywhere'; kv.appendChild(vv); }); d.appendChild(kv); pn.appendChild(d); });
+    return pn;
+  }
+
   function renderDetalle(body){
     var r = rowsAll().filter(function(x){ return x.key === detailKey; })[0];
     var back = el('button', 'btn sm back', '← Volver'); back.type = 'button'; back.addEventListener('click', function(){ tab = 'resumen'; renderAdmin(); }); body.appendChild(back);
@@ -1197,6 +1230,7 @@
       var d2 = el('button', 'btn', 'Copiar resumen'); d2.type = 'button'; d2.addEventListener('click', function(){ copyText(txt, say); }); ac.appendChild(d1); ac.appendChild(d2); sm.appendChild(ac);
       var tn = el('p', 'msg'); tn.id = 'toast'; sm.appendChild(tn); body.appendChild(sm);
       if(r.flags.length){ var pa = el('div', 'panel'); pa.appendChild(el('h3', null, 'Alertas')); var w = el('div'); w.style.cssText = 'display:flex;flex-wrap:wrap;gap:8px'; r.flags.forEach(function(f){ w.appendChild(el('span', 'badge ' + f.t, f.x)); }); pa.appendChild(w); body.appendChild(pa); }
+      body.appendChild(answersPanel(r.name, S0));
       var cols = el('div', 'cols2');
       if(r.sub.survey) body.appendChild(svDetail(r.sub.survey)); var pg = el('div', 'panel'); pg.appendChild(el('h3', null, 'Gastos al mes'));
       var eb = EXP.filter(function(e){ return num(S0.exp[e.k]) > 0; }).map(function(e){ return {l:e.l.replace(/ \(.*\)/, ''), v: e.k === 'anual' ? num(S0.exp[e.k])/12 : num(S0.exp[e.k])}; });
@@ -1304,7 +1338,7 @@
 
   /* ================= arranque ================= */
   var started = false;
-  (function(){ var v = document.createElement('div'); v.textContent = 'Versión 11 · 13 nov 2026'; v.style.cssText = 'text-align:center;font-size:11px;color:#8a8f9c;padding:0 16px 20px;'; document.body.appendChild(v); })();
+  (function(){ var v = document.createElement('div'); v.textContent = 'Versión 12 · 17 nov 2026'; v.style.cssText = 'text-align:center;font-size:11px;color:#8a8f9c;padding:0 16px 20px;'; document.body.appendChild(v); })();
   function startSession(session){
     if(started) return; started = true; uid = session.user.id; db = dbShim;
     $('root').textContent = ''; $('root').appendChild(el('p', 'loading', 'Cargando…'));
