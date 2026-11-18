@@ -238,7 +238,11 @@
   function brand(parent, fs){ var w = el('div', 'brand right'); w.appendChild(logoEl(fs)); parent.appendChild(w); return w; }
   function num(v){ var x = parseFloat(String(v == null ? '' : v).replace(/[^0-9.\-]/g, '')); return isFinite(x) ? x : 0; }
   var nf = new Intl.NumberFormat('es-MX', {maximumFractionDigits:0});
-  function mx(x){ return (x < 0 ? '−$' : '$') + nf.format(Math.abs(Math.round(x))); }
+  var CUR = 'MXN';
+  var CUR_OPTS = {'Pesos mexicanos (MXN)':'MXN','Dólares canadienses (CAD)':'CAD','Dólares estadounidenses (USD)':'USD','Otra moneda':'OTRA'};
+  function curOf(S){ var m = S && S.about && S.about.moneda; return CUR_OPTS[m] || 'MXN'; }
+  function curTag(c){ return c === 'MXN' || c === 'OTRA' ? '' : ' ' + c; }
+  function mx(x){ return (x < 0 ? '−$' : '$') + nf.format(Math.abs(Math.round(x))) + curTag(CUR); }
   function pc(x){ return (x*100).toLocaleString('es-MX', {maximumFractionDigits:0}) + '%'; }
   function fmt1(x){ return x.toLocaleString('es-MX', {minimumFractionDigits:1, maximumFractionDigits:1}); }
   function fdate(t){ if(!t) return '—'; try{ return new Date(t).toLocaleString('es-MX', {day:'numeric', month:'short', hour:'2-digit', minute:'2-digit'}); }catch(e){ return '—'; } }
@@ -270,7 +274,9 @@
     {k:'ocup', l:'Ocupación', t:'text'},
     {k:'dep', l:'Personas que dependen de ti económicamente', t:'int', h:'Hijos, padres u otras personas. Pon 0 si ninguna.'},
     {k:'viv', l:'Dónde vives hoy', t:'sel', o:['Propia, sin hipoteca','Propia, con hipoteca','Rentada','Prestada o familiar'], full:true},
-    {k:'rentaprop', l:'¿Tienes alguna propiedad que rentas a otras personas?', t:'sel', o:['No','Sí, una','Sí, más de una'], full:true, h:'Puedes vivir de renta y, además, rentar una propiedad tuya. El ingreso va en la sección 2 (Rentas) y el valor de la propiedad en la sección 4 (Lo que tienes, tipo Inmueble). Si tiene hipoteca, va en la sección 5.'}
+    {k:'rentaprop', l:'¿Tienes alguna propiedad que rentas a otras personas?', t:'sel', o:['No','Sí, una','Sí, más de una'], full:true, h:'Puedes vivir de renta y, además, rentar una propiedad tuya. El ingreso va en la sección 2 (Rentas) y el valor de la propiedad en la sección 4 (Lo que tienes, tipo Inmueble). Si tiene hipoteca, va en la sección 5.'},
+    {k:'pais', l:'País donde vives hoy', t:'text', h:'Por ejemplo: México, Canadá, Estados Unidos.'},
+    {k:'moneda', l:'¿En qué moneda vas a capturar tus cifras?', t:'sel', o:['Pesos mexicanos (MXN)','Dólares canadienses (CAD)','Dólares estadounidenses (USD)','Otra moneda'], full:true, h:'Usa la misma moneda en todo el formulario. Si tienes cuentas en otra moneda, conviértelas de forma aproximada a esta.'}
   ];
   var INC = [
     {k:'sueldo', l:'Sueldo neto'},
@@ -371,6 +377,8 @@
     else if(c.savingRate != null && c.savingRate < 0.1 && c.exp > 0) f.push({t:'warn', x:'Ahorra menos de 10%'});
     if(c.sources === 1 && c.inc > 0) f.push({t:'warn', x:'Depende de una sola fuente de ingreso'});
     if(S.inc.estab === 'Variable' || S.inc.estab === 'Muy variable') f.push({t:'warn', x:'Ingreso ' + S.inc.estab.toLowerCase()});
+    if(S.about.viv === 'Rentada' && !num(S.exp.viv)) f.push({t:'warn', x:'Vive en renta pero no capturó la renta: gastos incompletos'});
+    if(!S.about.moneda) f.push({t:'warn', x:'Sin moneda indicada (se asume pesos)'});
     var miss = [];
     [['vida','vida'],['gmm','gastos médicos'],['testa','testamento']].forEach(function(p){ var v = S.prot[p[0]]; if(v === 'No' || v === 'No sé') miss.push(p[1]); });
     if(miss.length) f.push({t:'warn', x:'Sin ' + miss.join(', ')});
@@ -408,6 +416,7 @@
   }
 
   /* ================= FORMULARIO (cliente y modo prueba) ================= */
+  var targetUid = null, editDirty = false;
   var S = emptyState(), lsKey = 'patrimonio-portal', persist = false, meta = {}, saveTimer = null, lsTimer = null, formOpts = {};
   function lsSave(){ clearTimeout(lsTimer); lsTimer = setTimeout(function(){ try{ localStorage.setItem(lsKey, JSON.stringify(S)); }catch(e){} }, 300); }
   function lsLoad(){ try{ var r = localStorage.getItem(lsKey); return r ? normalize(JSON.parse(r)) : null; }catch(e){ return null; } }
@@ -415,6 +424,7 @@
   function changed(){
     lsSave();
     if(!persist) return;
+    if(targetUid) editDirty = true;
     setNote('Guardando…'); clearTimeout(saveTimer);
     saveTimer = setTimeout(function(){ pushDoc().then(function(){ setNote('Guardado en tu portal'); }, function(){ setNote('No se pudo guardar en el portal; tu avance sigue en este navegador'); }); }, 1500);
   }
@@ -422,8 +432,8 @@
     if(!persist || !db) return Promise.resolve();
     var c = calc(S), nm = (S.about.nombre || '').trim();
     var body = {code: meta.code, status: meta.status || 'borrador', createdAt: meta.createdAt || Date.now(), submittedAt: meta.submittedAt || null, updatedAt: Date.now(), name: nm, data: clone(S), progress: doneArr(S, c).filter(Boolean).length, survey: meta.survey || null};
-    meta.createdAt = body.createdAt;
-    return db.doc('submissions/' + uid).set(body);
+    meta.createdAt = body.createdAt; editDirty = false;
+    return db.doc('submissions/' + (targetUid || uid)).set(body);
   }
 
   function moneyInput(get, set, label){
@@ -596,6 +606,7 @@
     } else pf.appendChild(el('p', 's', who + ' aún no contesta la sección de perfil de riesgo.'));
   }
   function update(){
+    CUR = curOf(S);
     var c = calc(S), d = doneArr(S, c), n = d.filter(Boolean).length, p = perfilOf(c);
     $('incT').textContent = mx(c.inc); $('expT').textContent = mx(c.exp); $('assetT').textContent = mx(c.assets); $('debtT').textContent = mx(c.debtTot);
     $('progN').textContent = n; $('progBar').style.width = (n/8*100) + '%';
@@ -689,6 +700,7 @@
     if(formOpts.banner){ $('fBanner').textContent = formOpts.banner; $('fBanner').hidden = false; }
     if(formOpts.eyebrow) $('fEyebrow').textContent = formOpts.eyebrow;
     if(!persist) $('send').hidden = true;
+    if(formOpts.adminEdit){ $('send').hidden = true; $('wipe').hidden = true; if($('svCard')) $('svCard').hidden = true; $('fPrivacy').textContent = 'Editando como asesor: los cambios se guardan solos en el perfil de tu cliente.'; }
     buildStatic(); buildAssets(); buildDebts(); buildGoals(); mountSurvey();
     $('addAsset').addEventListener('click', function(){ S.assets.push({}); buildAssets(); changed(); });
     $('addDebt').addEventListener('click', function(){ S.debts.push({}); buildDebts(); changed(); });
@@ -920,13 +932,14 @@
     var R = el('div', 'topright'); var lw = el('div', 'brand'); lw.appendChild(logoEl(17)); R.appendChild(lw); var rb = el('div'); rb.style.cssText = 'display:flex;gap:8px;align-items:center'; rb.appendChild(outBtn()); rb.appendChild(nb); R.appendChild(rb); top.appendChild(R); root.appendChild(top);
     var tabs = el('div', 'tabs'); tabs.setAttribute('role', 'tablist');
     NAV.forEach(function(t){
-      var b = el('button', 'tab', t[1]); b.type = 'button'; b.setAttribute('role', 'tab'); b.setAttribute('aria-selected', String(tab === t[0] || (tab === 'detalle' && t[0] === 'clientes')));
+      var b = el('button', 'tab', t[1]); b.type = 'button'; b.setAttribute('role', 'tab'); b.setAttribute('aria-selected', String(tab === t[0] || ((tab === 'detalle' || tab === 'editar') && t[0] === 'clientes')));
       b.addEventListener('click', function(){ tab = t[0]; if(tab === 'probar') startTest(); else renderAdmin(); }); tabs.appendChild(b);
     }); root.appendChild(tabs);
     var body = el('div'); root.appendChild(body); return body;
   }
   function renderAdmin(){
-    if(tab === 'probar') return;
+    if(tab !== 'editar') targetUid = null;
+    if(tab === 'probar' || tab === 'editar') return;
     var root = $('root'), body = chrome(root);
     if(!(loaded.inv && loaded.sub)){ body.appendChild(el('p', 'loading', 'Cargando datos…')); return; }
     if(tab === 'resumen') renderResumen(body); else if(tab === 'clientes') renderClientes(body); else if(tab === 'encuestas') renderEncuestas(body); else if(tab === 'correo') renderCorreo(body); else renderDetalle(body);
@@ -934,12 +947,14 @@
   }
 
   function renderResumen(body){
+    CUR = 'MXN';
     var rows = rowsAll(), withData = rows.filter(function(r){ return r.c && (r.c.assets > 0 || r.c.inc > 0); });
     var sent = rows.filter(function(r){ return r.sub && r.sub.status === 'enviado'; }).length, opened = rows.filter(function(r){ return r.sub; }).length;
     var st = el('div', 'stats');
     stat(st, 'Clientes', String(Object.keys(invites).length), opened + ' han abierto · ' + sent + ' enviaron');
-    var netoT = withData.reduce(function(s,r){ return s + r.c.neto; }, 0);
-    stat(st, 'Patrimonio neto conjunto', mx(netoT), withData.length + ' con datos');
+    var wMX = withData.filter(function(r){ return curOf(r.S) === 'MXN'; }), nOtra = withData.length - wMX.length;
+    var netoT = wMX.reduce(function(s,r){ return s + r.c.neto; }, 0);
+    stat(st, 'Patrimonio neto conjunto', mx(netoT), wMX.length + ' con datos en pesos' + (nOtra ? ' · ' + nOtra + ' en otra moneda, aparte' : ''));
     var sv = median(withData.filter(function(r){ return r.c.savingRate != null; }).map(function(r){ return r.c.savingRate; }));
     stat(st, 'Ahorro mediano', sv != null ? pc(sv) : '—', 'Del ingreso mensual');
     var mm = median(withData.filter(function(r){ return r.c.months != null; }).map(function(r){ return r.c.months; }));
@@ -949,7 +964,7 @@
     var cnt = [0,0,0,0]; withData.forEach(function(r){ if(r.p) cnt[r.p.l - 1]++; });
     if(cnt.reduce(function(a,b){ return a + b; }, 0)) hbars(p1, PERFIL.map(function(n, i){ return {l:n, v:cnt[i]}; }), function(i){ return String(i.v); }); else p1.appendChild(el('p', 'empty', 'Aún nadie completa el cuestionario.'));
     var p2 = el('div', 'panel'); p2.appendChild(el('h3', null, 'Dónde está el patrimonio (conjunto)'));
-    var tot = {}, all = 0; withData.forEach(function(r){ Object.keys(r.c.byType).forEach(function(k){ tot[k] = (tot[k]||0) + r.c.byType[k]; all += r.c.byType[k]; }); });
+    var tot = {}, all = 0; wMX.forEach(function(r){ Object.keys(r.c.byType).forEach(function(k){ tot[k] = (tot[k]||0) + r.c.byType[k]; all += r.c.byType[k]; }); });
     if(all) hbars(p2, ATYPES.map(function(k, i){ return {l:ASHORT[i], v:tot[k] || 0}; }).filter(function(x){ return x.v > 0; }), function(i){ return pc(i.v/all); }); else p2.appendChild(el('p', 'empty', 'Aún no hay activos capturados.'));
     cols.appendChild(p1); cols.appendChild(p2); body.appendChild(cols);
     var pa = el('div', 'panel'); pa.appendChild(el('h3', null, 'Alertas para atender'));
@@ -962,15 +977,15 @@
     if(!rows.length) pt.appendChild(el('p', 'empty', 'Todavía no hay clientes. Crea el primero en la pestaña Clientes.'));
     else {
       var t = mkTable(['Cliente','Estado','Patrimonio neto','Ahorro al mes','Autonomía','Deuda / activos','Perfil','Alertas','Actualizado'], [2,3,4,5]);
-      rows.forEach(function(r){ var c = r.c; t.add([r.name, badge(statusOf(r)), c ? mx(c.neto) : '—', c ? mx(c.ahorro) : '—', c && c.months != null ? fmt1(c.months) + ' m' : '—', c && c.debtWeight != null ? pc(c.debtWeight) : '—', r.p ? PERFIL[r.p.l - 1] : '—', r.flags.length ? String(r.flags.length) : '—', r.sub ? fdate(r.sub.updatedAt) : '—'], function(){ openDetail(r.key); }); });
-      pt.appendChild(t.wrap);
+      rows.forEach(function(r){ var c = r.c; CUR = curOf(r.S); t.add([r.name, badge(statusOf(r)), c ? mx(c.neto) : '—', c ? mx(c.ahorro) : '—', c && c.months != null ? fmt1(c.months) + ' m' : '—', c && c.debtWeight != null ? pc(c.debtWeight) : '—', r.p ? PERFIL[r.p.l - 1] : '—', r.flags.length ? String(r.flags.length) : '—', r.sub ? fdate(r.sub.updatedAt) : '—'], function(){ openDetail(r.key); }); });
+      CUR = 'MXN'; pt.appendChild(t.wrap);
     }
     var tn = el('p', 'toast'); tn.id = 'toast'; tn.textContent = toast; pt.appendChild(tn); body.appendChild(pt);
   }
   function toCSV(rows){
     var q = function(v){ v = String(v == null ? '' : v); return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; };
-    var out = [['Cliente','Código','Estado','Avance (de 8)','Patrimonio neto','Activos','Deudas','Ingresos al mes','Gastos al mes','Ahorro al mes','Meses de autonomía','Perfil','Alertas','Actualizado'].join(',')];
-    rows.forEach(function(r){ var c = r.c; out.push([r.name, r.invite ? showCode(r.key) : '', statusOf(r).x, r.n, c ? Math.round(c.neto) : '', c ? Math.round(c.assets) : '', c ? Math.round(c.debtTot) : '', c ? Math.round(c.inc) : '', c ? Math.round(c.exp) : '', c ? Math.round(c.ahorro) : '', c && c.months != null ? c.months.toFixed(1) : '', r.p ? PERFIL[r.p.l - 1] : '', r.flags.map(function(f){ return f.x; }).join(' | '), r.sub ? new Date(r.sub.updatedAt || 0).toISOString() : ''].map(q).join(',')); });
+    var out = [['Cliente','Código','Estado','Avance (de 8)','Patrimonio neto','Activos','Deudas','Ingresos al mes','Gastos al mes','Ahorro al mes','Meses de autonomía','Perfil','Alertas','Actualizado','Moneda'].join(',')];
+    rows.forEach(function(r){ var c = r.c; out.push([r.name, r.invite ? showCode(r.key) : '', statusOf(r).x, r.n, c ? Math.round(c.neto) : '', c ? Math.round(c.assets) : '', c ? Math.round(c.debtTot) : '', c ? Math.round(c.inc) : '', c ? Math.round(c.exp) : '', c ? Math.round(c.ahorro) : '', c && c.months != null ? c.months.toFixed(1) : '', r.p ? PERFIL[r.p.l - 1] : '', r.flags.map(function(f){ return f.x; }).join(' | '), r.sub ? new Date(r.sub.updatedAt || 0).toISOString() : '', curOf(r.S)].map(q).join(',')); });
     return out.join('\n');
   }
   function openDetail(key){ detailKey = key; tab = 'detalle'; renderAdmin(); window.scrollTo(0, 0); }
@@ -1184,16 +1199,16 @@
 
   function answerData(S0){
     var v = function(x){ x = x == null ? '' : String(x).trim(); return x || '—'; };
-    var out = [], rows;
+    var CURA = curOf(S0), out = [], rows;
     rows = ABOUT.map(function(f){ return [f.l, v(S0.about[f.k])]; }); out.push({h:'1. Sobre ti', rows:rows});
     rows = INC.map(function(f){ return [f.l, v(S0.inc[f.k])]; }); out.push({h:'2. Ingresos (al mes)', rows:rows});
     rows = EXP.map(function(f){ return [f.l, v(S0.exp[f.k])]; }); out.push({h:'3. Gastos (al mes)', rows:rows});
-    rows = []; S0.assets.forEach(function(a, i){ if(!(a.t || a.d || a.m)) return; rows.push(['Activo ' + (i + 1), (a.t || 'Sin tipo') + ' · ' + (a.d || 'sin descripción') + ' · ' + (a.m ? '$' + a.m : 'sin monto')]); });
+    rows = []; S0.assets.forEach(function(a, i){ if(!(a.t || a.d || a.m)) return; rows.push(['Activo ' + (i + 1), (a.t || 'Sin tipo') + ' · ' + (a.d || 'sin descripción') + ' · ' + (a.m ? '$' + a.m + curTag(CURA) : 'sin monto')]); });
     if(!rows.length) rows.push(['Activos', '—']); out.push({h:'4. Lo que tienes', rows:rows});
-    rows = []; S0.debts.forEach(function(d, i){ if(!(d.t || d.d || d.s || d.p || d.r)) return; rows.push(['Deuda ' + (i + 1), (d.t || 'Sin tipo') + ' · ' + (d.d || 'sin acreedor') + ' · saldo ' + (d.s ? '$' + d.s : '—') + ' · pago al mes ' + (d.p ? '$' + d.p : '—') + ' · tasa ' + (d.r ? d.r + '%' : '—')]); });
+    rows = []; S0.debts.forEach(function(d, i){ if(!(d.t || d.d || d.s || d.p || d.r)) return; rows.push(['Deuda ' + (i + 1), (d.t || 'Sin tipo') + ' · ' + (d.d || 'sin acreedor') + ' · saldo ' + (d.s ? '$' + d.s + curTag(CURA) : '—') + ' · pago al mes ' + (d.p ? '$' + d.p + curTag(CURA) : '—') + ' · tasa ' + (d.r ? d.r + '%' : '—')]); });
     if(!rows.length) rows.push(['Deudas', S0.nodebt ? 'Indica que no tiene deudas' : '—']); out.push({h:'5. Lo que debes', rows:rows});
     rows = PROT.map(function(f){ return [f.l, v(S0.prot[f.k])]; }); out.push({h:'6. Protección', rows:rows});
-    rows = []; S0.goals.forEach(function(g, i){ if(!(g.n || g.m || g.y || g.i)) return; rows.push(['Meta ' + (i + 1), (g.n || 'Sin nombre') + ' · ' + (g.m ? '$' + g.m : 'sin monto') + ' · año ' + (g.y || '—') + ' · prioridad ' + (g.i || '—')]); });
+    rows = []; S0.goals.forEach(function(g, i){ if(!(g.n || g.m || g.y || g.i)) return; rows.push(['Meta ' + (i + 1), (g.n || 'Sin nombre') + ' · ' + (g.m ? '$' + g.m + curTag(CURA) : 'sin monto') + ' · año ' + (g.y || '—') + ' · prioridad ' + (g.i || '—')]); });
     if(!rows.length) rows.push(['Metas', '—']); out.push({h:'7. Metas', rows:rows});
     rows = RISK.map(function(q){ var a = S0.risk[q.k]; return [q.q, a && q.o[a - 1] ? q.o[a - 1] : '—']; }); out.push({h:'8. Perfil de riesgo', rows:rows});
     return out;
@@ -1214,12 +1229,27 @@
     return pn;
   }
 
+  function startEdit(r){
+    tab = 'editar'; targetUid = r.sub.uid; S = normalize(clone(r.sub.data)); lsKey = 'patrimonio-admin-' + targetUid; editDirty = false;
+    meta = {code:r.sub.code, status:r.sub.status, createdAt:r.sub.createdAt, submittedAt:r.sub.submittedAt || null, survey:r.sub.survey || null};
+    var root = $('root'), body = chrome(root), host = el('div'); host.style.cssText = 'max-width:1080px;margin:0 auto';
+    var back = el('button', 'btn sm back', '← Volver al detalle'); back.type = 'button';
+    back.addEventListener('click', function(){
+      clearTimeout(saveTimer); back.disabled = true;
+      (editDirty ? pushDoc() : Promise.resolve()).then(function(){ targetUid = null; persist = false; detailKey = r.key; tab = 'detalle'; renderAdmin(); window.scrollTo(0, 0); }, function(){ back.disabled = false; setNote('No se pudo guardar; revisa tu conexión e inténtalo otra vez.'); });
+    });
+    body.appendChild(back); body.appendChild(host);
+    mountForm({persist:true, host:host, adminEdit:true, eyebrow:'Editando el perfil de ' + r.name, banner:'Estás editando como asesor. Los cambios se guardan solos en el perfil de tu cliente y él los verá la próxima vez que entre.'});
+    window.scrollTo(0, 0);
+  }
+
   function renderDetalle(body){
     var r = rowsAll().filter(function(x){ return x.key === detailKey; })[0];
     var back = el('button', 'btn sm back', '← Volver'); back.type = 'button'; back.addEventListener('click', function(){ tab = 'resumen'; renderAdmin(); }); body.appendChild(back);
     if(!r){ body.appendChild(el('p', 'empty', 'No se encontró este cliente.')); return; }
+    CUR = curOf(r.S);
     var pn = el('div', 'panel'), hd = el('div', 'detail-head'), ti = el('div'); ti.appendChild(el('h2', null, r.name));
-    var sub = el('p', 'hint'); sub.style.margin = '4px 0 0'; sub.textContent = (r.invite ? 'Código ' + showCode(r.key) + (r.invite.email ? ' · ' + r.invite.email : '') + ' · ' : '') + (r.sub ? 'Actualizado ' + fdate(r.sub.updatedAt) + (r.sub.submittedAt ? ' · Enviado ' + fdate(r.sub.submittedAt) : '') : 'Aún no abre el formulario'); ti.appendChild(sub); hd.appendChild(ti); var hr = el('div'); hr.style.cssText = 'display:flex;gap:10px;align-items:center;flex-wrap:wrap'; hr.appendChild(badge(statusOf(r))); if(r.invite){ var ib = el('button', 'btn sm', r.invite.invitedAt ? 'Reenviar invitación' : 'Enviar invitación'); ib.type = 'button'; ib.addEventListener('click', function(){ openComposer(r.key); }); hr.appendChild(ib); } hd.appendChild(hr); pn.appendChild(hd); body.appendChild(pn);
+    var sub = el('p', 'hint'); sub.style.margin = '4px 0 0'; sub.textContent = (r.invite ? 'Código ' + showCode(r.key) + (r.invite.email ? ' · ' + r.invite.email : '') + ' · ' : '') + (r.sub ? 'Actualizado ' + fdate(r.sub.updatedAt) + (r.sub.submittedAt ? ' · Enviado ' + fdate(r.sub.submittedAt) : '') : 'Aún no abre el formulario'); ti.appendChild(sub); hd.appendChild(ti); var hr = el('div'); hr.style.cssText = 'display:flex;gap:10px;align-items:center;flex-wrap:wrap'; hr.appendChild(badge(statusOf(r))); if(r.sub){ var eb0 = el('button', 'btn sm', 'Editar respuestas'); eb0.type = 'button'; eb0.addEventListener('click', function(){ startEdit(r); }); hr.appendChild(eb0); } if(r.invite){ var ib = el('button', 'btn sm', r.invite.invitedAt ? 'Reenviar invitación' : 'Enviar invitación'); ib.type = 'button'; ib.addEventListener('click', function(){ openComposer(r.key); }); hr.appendChild(ib); } hd.appendChild(hr); pn.appendChild(hd); body.appendChild(pn);
     if(!r.sub){
       if(r.invite){ var pe = el('div', 'panel'); pe.appendChild(el('p', 'empty', 'Todavía no hay respuestas. Copia la invitación y envíasela.')); var cp = el('button', 'btn primary', 'Enviar invitación'); cp.type = 'button'; cp.addEventListener('click', function(){ openComposer(r.key); }); pe.appendChild(cp); var tn0 = el('p', 'toast'); tn0.id = 'toast'; pe.appendChild(tn0); body.appendChild(pe); }
     } else {
@@ -1280,11 +1310,11 @@
   function startAdmin(){
     renderAdmin();
     db.collection('invites').onSnapshot(function(snap){
-      var m = {}; snap.docs.forEach(function(d){ var v = d.data(); if(v && v.role !== 'admin') m[d.id] = v; }); invites = m; loaded.inv = true; if(tab !== 'probar' && !(modal && modal.busy)) renderAdmin();
+      var m = {}; snap.docs.forEach(function(d){ var v = d.data(); if(v && v.role !== 'admin') m[d.id] = v; }); invites = m; loaded.inv = true; if(tab !== 'probar' && tab !== 'editar' && !(modal && modal.busy)) renderAdmin();
     }, function(){ loaded.inv = true; });
     db.collection('submissions').onSnapshot(function(snap){
       subs = snap.docs.map(function(d){ var v = d.data() || {}; return {uid:d.id, code:v.code || '', status:v.status || 'borrador', createdAt:v.createdAt, submittedAt:v.submittedAt, updatedAt:v.updatedAt, name:v.name || '', survey:v.survey || null, data:normalize(v.data)}; });
-      loaded.sub = true; if(tab !== 'probar' && tab !== 'correo' && !(modal && modal.busy)) renderAdmin();
+      loaded.sub = true; if(tab !== 'probar' && tab !== 'correo' && tab !== 'editar' && !(modal && modal.busy)) renderAdmin();
     }, function(){ loaded.sub = true; });
     try{ db.doc('config/email').onSnapshot(function(snap){ if(snap && snap.exists){ var d = snap.data() || {}; cfg = {asesor:d.asesor || '', fecha:d.fecha || '', subject:d.subject || '', body:d.body || ''}; } }, function(){}); }catch(e){}
   }
@@ -1338,7 +1368,7 @@
 
   /* ================= arranque ================= */
   var started = false;
-  (function(){ var v = document.createElement('div'); v.textContent = 'Versión 12 · 17 nov 2026'; v.style.cssText = 'text-align:center;font-size:11px;color:#8a8f9c;padding:0 16px 20px;'; document.body.appendChild(v); })();
+  (function(){ var v = document.createElement('div'); v.textContent = 'Versión 13 · 17 nov 2026'; v.style.cssText = 'text-align:center;font-size:11px;color:#8a8f9c;padding:0 16px 20px;'; document.body.appendChild(v); })();
   function startSession(session){
     if(started) return; started = true; uid = session.user.id; db = dbShim;
     $('root').textContent = ''; $('root').appendChild(el('p', 'loading', 'Cargando…'));
