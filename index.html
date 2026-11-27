@@ -722,6 +722,7 @@
       if(persist){ meta.status = 'borrador'; meta.submittedAt = null; }
       mountForm(formOpts); changed(); window.scrollTo(0, 0);
     });
+    if(!formOpts.host && !isAdmin && profile && profile.code && $('fWelcome') && $('fWelcome').parentNode){ var rp = reportPanel(profile.code, false); rp.style.margin = '16px 0'; $('fWelcome').parentNode.insertBefore(rp, $('fWelcome').nextSibling); }
     update();
   }
 
@@ -1283,6 +1284,7 @@
       var pq = S0.risk.q10 ? RISK[9].o[S0.risk.q10 - 1] : null; if(pq) pm.appendChild(el('p', 'hint', 'Prioridad principal: ' + pq));
       cols2.appendChild(pr); cols2.appendChild(pm); body.appendChild(cols2);
     }
+    if(r.invite){ body.appendChild(reportPanel(r.key, true)); }
     if(r.invite){
       var pnn = el('div', 'panel'); pnn.appendChild(el('h3', null, 'Tus notas')); var f = el('div', 'f'); var ta2 = el('textarea'); ta2.rows = 5; ta2.setAttribute('aria-label', 'Notas del asesor'); ta2.placeholder = 'Observaciones para la sesión 2, pendientes, acuerdos…';
       ta2.value = draft.notes[r.key] != null ? draft.notes[r.key] : (r.invite.notes || ''); ta2.addEventListener('input', function(){ draft.notes[r.key] = ta2.value; }); f.appendChild(ta2); pnn.appendChild(f);
@@ -1317,6 +1319,39 @@
       loaded.sub = true; if(tab !== 'probar' && tab !== 'correo' && tab !== 'editar' && !(modal && modal.busy)) renderAdmin();
     }, function(){ loaded.sub = true; });
     try{ db.doc('config/email').onSnapshot(function(snap){ if(snap && snap.exists){ var d = snap.data() || {}; cfg = {asesor:d.asesor || '', fecha:d.fecha || '', subject:d.subject || '', body:d.body || ''}; } }, function(){}); }catch(e){}
+  }
+
+
+  /* ================= REPORTE PATRIMONIAL (privado: asesor + dueña) ================= */
+  var repMsgBound = false;
+  function bindRepMsg(){ if(repMsgBound) return; repMsgBound = true; window.addEventListener('message', function(e){ var d = e.data; if(!d || d.rep !== 1) return; var fs = document.querySelectorAll('iframe.repframe'); for(var i = 0; i < fs.length; i++){ if(fs[i].contentWindow === e.source){ fs[i].style.height = Math.min(Math.max(+d.h || 600, 400), 30000) + 'px'; } } }); }
+  function reportPanel(code, canEdit){
+    bindRepMsg();
+    var pn = el('div', 'panel'); pn.id = 'repPanel'; pn.appendChild(el('h3', null, 'Reporte patrimonial'));
+    var sub = el('p', 'hint', 'Cargando…'); sub.style.margin = '0 0 10px'; pn.appendChild(sub);
+    var body = el('div'); pn.appendChild(body);
+    var tools = null;
+    function draw(row){
+      body.textContent = '';
+      if(row && row.html){
+        sub.textContent = 'Solo lo ven ' + (canEdit ? 'tú y tu cliente' : 'tu asesor y tú') + '. Actualizado ' + fdate(new Date(row.updated_at).getTime()) + '.';
+        var fr = document.createElement('iframe'); fr.className = 'repframe'; fr.setAttribute('sandbox', 'allow-scripts'); fr.setAttribute('title', 'Reporte patrimonial');
+        fr.style.cssText = 'width:100%;height:900px;border:1px solid var(--line, #e6e2d8);border-radius:12px;background:#fff;display:block'; fr.srcdoc = row.html; body.appendChild(fr);
+      } else { sub.textContent = canEdit ? 'Todavía no hay reporte para este cliente. Carga el archivo HTML del reporte.' : 'Tu asesor todavía no ha cargado tu reporte.'; }
+      if(canEdit){
+        if(tools) tools.remove(); tools = el('div', 'actions'); tools.style.marginTop = '12px';
+        var inp = document.createElement('input'); inp.type = 'file'; inp.accept = '.html,text/html'; inp.id = 'repFile'; inp.hidden = true;
+        var up = el('button', 'btn', row && row.html ? 'Reemplazar reporte' : 'Cargar reporte (HTML)'); up.type = 'button'; up.addEventListener('click', function(){ inp.click(); });
+        inp.addEventListener('change', function(){ var f = inp.files && inp.files[0]; if(!f) return; var rd = new FileReader(); rd.onload = function(){ save(String(rd.result)); }; rd.readAsText(f); });
+        tools.appendChild(up); tools.appendChild(inp);
+        if(row && row.html){ var rm = el('button', 'btn danger', 'Quitar reporte'); rm.type = 'button'; var t = null; rm.addEventListener('click', function(){ if(!t){ rm.textContent = '¿Seguro? Toca otra vez'; t = setTimeout(function(){ t = null; rm.textContent = 'Quitar reporte'; }, 4000); return; } clearTimeout(t); sb.from('reportes').delete().eq('code', code).then(function(r){ if(r.error){ sub.textContent = 'No se pudo quitar.'; return; } draw(null); }); }); tools.appendChild(rm); }
+        pn.appendChild(tools);
+      }
+    }
+    window.__repSave = null;
+    function save(html){ sub.textContent = 'Guardando…'; sb.from('reportes').upsert({code:code, html:html, updated_at:new Date().toISOString()}).then(function(r){ if(r.error){ sub.textContent = 'No se pudo guardar el reporte.'; return; } load(); }); }
+    function load(){ sb.from('reportes').select('html,updated_at').eq('code', code).maybeSingle().then(function(r){ if(r.error){ sub.textContent = 'No se pudo cargar el reporte.'; if(canEdit) draw(null); return; } draw(r.data); }, function(){ sub.textContent = 'No se pudo cargar el reporte.'; }); }
+    pn.__save = save; load(); return pn;
   }
 
   /* ================= datos: Supabase ================= */
@@ -1368,7 +1403,7 @@
 
   /* ================= arranque ================= */
   var started = false;
-  (function(){ var v = document.createElement('div'); v.textContent = 'Versión 13 · 17 nov 2026'; v.style.cssText = 'text-align:center;font-size:11px;color:#8a8f9c;padding:0 16px 20px;'; document.body.appendChild(v); })();
+  (function(){ var v = document.createElement('div'); v.textContent = 'Versión 14 · 26 nov 2026'; v.style.cssText = 'text-align:center;font-size:11px;color:#8a8f9c;padding:0 16px 20px;'; document.body.appendChild(v); })();
   function startSession(session){
     if(started) return; started = true; uid = session.user.id; db = dbShim;
     $('root').textContent = ''; $('root').appendChild(el('p', 'loading', 'Cargando…'));
